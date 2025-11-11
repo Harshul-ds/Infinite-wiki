@@ -4,7 +4,7 @@
 */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { generateDefinition, generateAsciiArt, generateComparison, checkForAmbiguity, AsciiArtData, DefinitionData, ComparisonData, Meaning } from './services/geminiService';
+import { generateDefinition, generateAsciiArt, checkForAmbiguity, AsciiArtData, DefinitionData, Meaning } from './services/geminiService';
 import ContentDisplay from './components/ContentDisplay';
 import SearchBar from './components/SearchBar';
 import LoadingSkeleton from './components/LoadingSkeleton';
@@ -13,7 +13,9 @@ import Breadcrumbs from './components/Breadcrumbs';
 import TemperatureSlider from './components/TemperatureSlider';
 import Pinboard from './components/Pinboard';
 import Disambiguation from './components/Disambiguation';
+import FeatureTour from './components/FeatureTour';
 import { PinnedItem } from './types';
+import InteractiveText from './components/InteractiveText';
 
 
 // A curated list of "banger" words and phrases for the random button.
@@ -33,6 +35,51 @@ const PREDEFINED_WORDS = [
 ];
 const UNIQUE_WORDS = [...new Set(PREDEFINED_WORDS)];
 
+// FIX: Add `as const` to infer literal types for `position`, matching the `TourStep` interface.
+const tourSteps = [
+  {
+    selector: '[data-tour-id="search-input"]',
+    title: 'Start Your Journey',
+    content: 'Type any concept you are curious about here and press Enter to generate a new page.',
+    position: 'bottom',
+  },
+  {
+    selector: '[data-tour-id="random-button"]',
+    title: 'Feeling Adventurous?',
+    content: 'Click the "Random" button to let serendipity guide you to a new, interesting topic.',
+    position: 'bottom',
+  },
+  {
+    selector: '[data-tour-id="pinboard-button"]',
+    title: 'Your Personal Pinboard',
+    content: 'Open your personal workspace to save and organize concepts or art you find interesting.',
+    position: 'bottom',
+  },
+  {
+    selector: '[data-tour-id="temp-slider"]',
+    title: 'Tune the AI\'s Mind',
+    content: 'Slide this to adjust the AI\'s output, from more factual and direct to more creative and metaphorical.',
+    position: 'bottom',
+  },
+  {
+    selector: '[data-tour-id="ascii-art"]',
+    title: 'AI-Generated Art',
+    content: 'Every topic gets a unique visual representation. You can drag this art onto your Pinboard!',
+    position: 'top',
+  },
+  {
+    selector: '[data-tour-id="interactive-word"]',
+    title: 'Endless Exploration',
+    content: 'Every single word on the page is a new link. Click any word to continue your journey down the rabbit hole.',
+    position: 'top',
+  },
+  {
+    selector: '[data-tour-id="key-concept"]',
+    title: 'Draggable Concepts',
+    content: 'Key concepts are broken down for you. You can also drag these blocks onto your Pinboard to save them.',
+    position: 'top',
+  },
+] as const;
 
 /**
  * Creates a simple ASCII art bounding box as a fallback.
@@ -52,7 +99,7 @@ const createFallbackArt = (topic: string): AsciiArtData => {
 
 const App: React.FC = () => {
   const [history, setHistory] = useState<string[]>(['Hypertext']);
-  const [content, setContent] = useState<DefinitionData | ComparisonData | null>(null);
+  const [content, setContent] = useState<DefinitionData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [asciiArt, setAsciiArt] = useState<AsciiArtData | null>(null);
@@ -60,14 +107,27 @@ const App: React.FC = () => {
   const [ambiguityOptions, setAmbiguityOptions] = useState<Meaning[] | null>(null);
   const [pinnedItems, setPinnedItems] = useState<PinnedItem[]>([]);
   const [isPinboardVisible, setIsPinboardVisible] = useState(false);
+  const [isTourActive, setIsTourActive] = useState(false);
+
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('hasSeenTour');
+    if (!hasSeenTour) {
+      // Use a timeout to ensure the initial content has had a chance to render
+      setTimeout(() => {
+        setIsTourActive(true);
+      }, 500);
+    }
+  }, []);
 
   const currentTopic = history[history.length - 1];
 
   useEffect(() => {
     if (!currentTopic) return;
+    
+    // Scroll to the top of the page when a new topic is loading.
+    window.scrollTo(0, 0);
 
     let isCancelled = false;
-    const isComparison = currentTopic.toLowerCase().includes(' vs. ');
 
     const fetchContent = async () => {
       // Set initial state for a clean page load
@@ -78,14 +138,12 @@ const App: React.FC = () => {
       setAmbiguityOptions(null);
 
       try {
-        // Step 1: Check for ambiguity (unless it's a comparison)
-        if (!isComparison) {
-          const ambiguityData = await checkForAmbiguity(currentTopic, temperature);
-          if (!isCancelled && ambiguityData.is_ambiguous && ambiguityData.meanings?.length) {
-            setAmbiguityOptions(ambiguityData.meanings);
-            setIsLoading(false);
-            return; // Stop processing, wait for user input
-          }
+        // Step 1: Check for ambiguity
+        const ambiguityData = await checkForAmbiguity(currentTopic, temperature);
+        if (!isCancelled && ambiguityData.is_ambiguous && ambiguityData.meanings?.length) {
+          setAmbiguityOptions(ambiguityData.meanings);
+          setIsLoading(false);
+          return; // Stop processing, wait for user input
         }
         
         // Step 2: Fetch content and art
@@ -101,13 +159,7 @@ const App: React.FC = () => {
             }
           });
 
-        let data;
-        if (isComparison) {
-          const [topicA, topicB] = currentTopic.split(/ vs. /i);
-          data = await generateComparison(topicA.trim(), topicB.trim(), temperature);
-        } else {
-          data = await generateDefinition(currentTopic, temperature);
-        }
+        const data = await generateDefinition(currentTopic, temperature);
         
         if (!isCancelled) {
           setContent(data);
@@ -174,8 +226,14 @@ const App: React.FC = () => {
     setPinnedItems(prev => prev.map(item => item.id === id ? { ...item, x, y } : item));
   };
 
+  const handleTourComplete = () => {
+    setIsTourActive(false);
+    localStorage.setItem('hasSeenTour', 'true');
+  };
+
   return (
     <div>
+       {isTourActive && <FeatureTour steps={tourSteps} onComplete={handleTourComplete} />}
       <Breadcrumbs path={history} onNavigate={handleBreadcrumbClick} />
       <SearchBar 
         onSearch={handleTopicChange} 
@@ -198,7 +256,7 @@ const App: React.FC = () => {
       <main>
         <div>
           <h2 style={{ marginBottom: '2rem', textTransform: 'capitalize' }}>
-            {currentTopic}
+            <InteractiveText text={currentTopic} onWordClick={handleTopicChange} />
           </h2>
 
           {error && (

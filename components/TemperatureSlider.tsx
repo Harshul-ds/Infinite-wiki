@@ -12,7 +12,7 @@ interface TemperatureSliderProps {
 
 const TemperatureSlider: React.FC<TemperatureSliderProps> = ({ value, onChange, disabled }) => {
   return (
-    <div className="temperature-slider-container">
+    <div className="temperature-slider-container" data-tour-id="temp-slider">
       <label htmlFor="temperature-slider" className="slider-label">Factual</label>
       <input
         id="temperature-slider"

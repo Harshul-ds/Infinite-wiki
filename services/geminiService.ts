@@ -36,19 +36,8 @@ export interface AsciiArtData {
 }
 
 export interface DefinitionData {
-  type: 'definition';
   summary: string;
   key_concepts: { title: string; description: string }[];
-}
-
-export interface ComparisonData {
-  type: 'comparison';
-  topicA: string;
-  topicB: string;
-  introduction: string;
-  similarities: { title: string; description: string }[];
-  differences: { title: string; description: string }[];
-  conclusion: string;
 }
 
 export interface Meaning {
@@ -59,6 +48,26 @@ export interface Meaning {
 export interface AmbiguityData {
   is_ambiguous: boolean;
   meanings?: Meaning[];
+}
+
+/**
+ * Cleans a string that should be JSON, removing markdown fences, and parses it.
+ * @param jsonStr The raw string from the API.
+ * @returns The parsed JSON object.
+ */
+function cleanAndParseJson(jsonStr: string): any {
+  let cleanStr = jsonStr.trim();
+  const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
+  const match = cleanStr.match(fenceRegex);
+  if (match && match[1]) {
+    cleanStr = match[1].trim();
+  }
+
+  // A simple guard to prevent the app from crashing on non-JSON responses.
+  if (!cleanStr.startsWith('{') || !cleanStr.endsWith('}')) {
+      throw new Error('Response is not a valid JSON object. Content: ' + cleanStr);
+  }
+  return JSON.parse(cleanStr);
 }
 
 /**
@@ -93,11 +102,7 @@ Return ONLY the raw JSON object. Do not include markdown fences or any other tex
       },
     });
 
-    const jsonStr = response.text.trim();
-    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
-        throw new Error('Response is not a valid JSON object');
-    }
-    const data = JSON.parse(jsonStr) as AmbiguityData;
+    const data = cleanAndParseJson(response.text) as AmbiguityData;
 
     if (typeof data.is_ambiguous !== 'boolean') {
       throw new Error('JSON response is missing required "is_ambiguous" field.');
@@ -136,6 +141,7 @@ export async function generateDefinition(topic: string, temperature: number): Pr
 
 - The "summary" must be a single string.
 - "key_concepts" must be an array of 2-3 objects, each with a "title" string and a "description" string.
+- IMPORTANT: All string values inside the JSON must be properly escaped. For instance, backslashes (\\) should be escaped as (\\\\), and double quotes (") should be escaped as (\\").
 - IMPORTANT: Preserve all special characters, mathematical notations, and exponents (e.g., ensure "m/s^2" is not simplified to "m/s"). The output must be accurate and suitable for a technical audience.
 
 Return ONLY the raw JSON object. Do not include markdown fences or any other text outside the JSON structure. The response must start with "{" and end with "}".`;
@@ -152,19 +158,14 @@ Return ONLY the raw JSON object. Do not include markdown fences or any other tex
       },
     });
 
-    const jsonStr = response.text.trim();
-    // A simple validation
-    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
-        throw new Error('Response is not a valid JSON object');
-    }
-    const data = JSON.parse(jsonStr);
+    const data = cleanAndParseJson(response.text);
     
     // More validation
     if (!data.summary || !data.key_concepts) {
       throw new Error('JSON response is missing required fields.');
     }
 
-    return { ...data, type: 'definition' };
+    return data;
   } catch (error) {
     console.error('Error generating definition from Gemini:', error);
     const errorMessage =
@@ -173,78 +174,6 @@ Return ONLY the raw JSON object. Do not include markdown fences or any other tex
     throw new Error(`Could not generate content for "${topic}". ${errorMessage}`);
   }
 }
-
-/**
- * Generates a structured comparison between two topics.
- * @param topicA The first topic.
- * @param topicB The second topic.
- * @param temperature A value from 0.0 to 1.0 controlling the randomness of the output.
- * @returns A promise that resolves to a structured comparison object.
- */
-export async function generateComparison(topicA: string, topicB: string, temperature: number): Promise<ComparisonData> {
-  if (!process.env.API_KEY) {
-    throw new Error('API_KEY is not configured. Please check your environment variables to continue.');
-  }
-
-  const prompt = `For the terms "${topicA}" and "${topicB}", generate a structured encyclopedia-style comparison in JSON format. The JSON object must adhere to this structure:
-
-{
-  "introduction": "A concise, single-paragraph introduction to the comparison between the two topics.",
-  "similarities": [
-    {
-      "title": "Shared Concept Title",
-      "description": "A detailed explanation of a core concept the topics share."
-    }
-  ],
-  "differences": [
-    {
-      "title": "Contrasting Concept Title",
-      "description": "A detailed explanation of a core concept where the topics differ."
-    }
-  ],
-  "conclusion": "A single-paragraph conclusion summarizing the relationship and significance of comparing these topics."
-}
-
-- "introduction" and "conclusion" must be single strings.
-- "similarities" and "differences" must be arrays of 2-3 objects, each with a "title" string and a "description" string.
-- IMPORTANT: Preserve all special characters, mathematical notations, and exponents. The output must be accurate and suitable for a technical audience.
-
-Return ONLY the raw JSON object. Do not include markdown fences or any other text outside the JSON structure. The response must start with "{" and end with "}".`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: textModelName,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: temperature,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
-
-    const jsonStr = response.text.trim();
-    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
-        throw new Error('Response is not a valid JSON object');
-    }
-    const data = JSON.parse(jsonStr);
-
-    if (!data.introduction || !data.similarities || !data.differences || !data.conclusion) {
-      throw new Error('JSON response is missing required fields.');
-    }
-
-    return {
-      ...data,
-      type: 'comparison',
-      topicA,
-      topicB,
-    };
-  } catch (error) {
-    console.error('Error generating comparison from Gemini:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-    throw new Error(`Could not generate comparison for "${topicA}" vs "${topicB}". ${errorMessage}`);
-  }
-}
-
 
 /**
  * Generates a single random word or concept using the Gemini API.
@@ -267,7 +196,6 @@ export async function getRandomWord(): Promise<string> {
       },
     });
     return response.text.trim();
-// FIX: Added curly braces to the catch block to fix syntax error.
   } catch (error) {
     console.error('Error getting random word from Gemini:', error);
     const errorMessage =
@@ -323,24 +251,7 @@ Return ONLY the raw JSON object, no additional text. The response must start wit
         config: config,
       });
 
-      let jsonStr = response.text.trim();
-      
-      // Debug logging
-      console.log(`Attempt ${attempt}/${maxRetries} - Raw API response:`, jsonStr);
-      
-      // Remove any markdown code fences if present
-      const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
-      const match = jsonStr.match(fenceRegex);
-      if (match && match[1]) {
-        jsonStr = match[1].trim();
-      }
-
-      // Ensure the string starts with { and ends with }
-      if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
-        throw new Error('Response is not a valid JSON object');
-      }
-
-      const parsedData = JSON.parse(jsonStr) as AsciiArtData;
+      const parsedData = cleanAndParseJson(response.text) as AsciiArtData;
       
       // Validate the response structure
       if (typeof parsedData.art !== 'string' || parsedData.art.trim().length === 0) {

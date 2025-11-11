@@ -3,40 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React from 'react';
-import type { DefinitionData, ComparisonData } from '../services/geminiService';
+import type { DefinitionData } from '../services/geminiService';
+import InteractiveText from './InteractiveText';
 
 interface ContentDisplayProps {
-  content: DefinitionData | ComparisonData;
+  content: DefinitionData;
   onWordClick: (word: string) => void;
 }
 
 const InteractiveParagraph: React.FC<{
   text: string;
   onWordClick: (word: string) => void;
-}> = ({ text, onWordClick }) => {
-  const words = text.split(/(\s+)/).filter(Boolean); // Keep whitespace for spacing
-
+  isTourTarget?: boolean;
+}> = ({ text, onWordClick, isTourTarget = false }) => {
   return (
     <p>
-      {words.map((word, index) => {
-        if (/\S/.test(word)) { // Only make non-whitespace words clickable
-          // Trim only leading/trailing punctuation to preserve internal characters (e.g., in "e.g." or "m/s^2")
-          const cleanWord = word.replace(/^[.,!?;:()"']+|[.,!?;:()"']+$/g, '');
-          if (cleanWord) {
-            return (
-              <button
-                key={index}
-                onClick={() => onWordClick(cleanWord)}
-                className="interactive-word"
-                aria-label={`Learn more about ${cleanWord}`}
-              >
-                {word}
-              </button>
-            );
-          }
-        }
-        return <span key={index}>{word}</span>; // Render whitespace and punctuation as-is
-      })}
+      <InteractiveText
+        text={text}
+        onWordClick={onWordClick}
+        data-tour-id={isTourTarget ? 'interactive-word' : undefined}
+      />
     </p>
   );
 };
@@ -52,70 +38,27 @@ const ContentDisplay: React.FC<ContentDisplayProps> = ({ content, onWordClick })
     event.dataTransfer.setData('application/json', JSON.stringify(data));
     event.dataTransfer.effectAllowed = 'copy';
   };
-
-  if (content.type === 'comparison') {
-    return (
-      <div>
-        <InteractiveParagraph text={content.introduction} onWordClick={onWordClick} />
-
-        {content.similarities?.length > 0 && (
-          <div className="section">
-            <h3>Similarities</h3>
-            {content.similarities.map((item, index) => (
-              <div 
-                key={index} 
-                className="concept"
-                draggable="true"
-                onDragStart={(e) => handleDragStart(e, item)}
-              >
-                <h4>{item.title}</h4>
-                <InteractiveParagraph text={item.description} onWordClick={onWordClick} />
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {content.differences?.length > 0 && (
-          <div className="section">
-            <h3>Differences</h3>
-            {content.differences.map((item, index) => (
-              <div 
-                key={index} 
-                className="concept"
-                draggable="true"
-                onDragStart={(e) => handleDragStart(e, item)}
-              >
-                <h4>{item.title}</h4>
-                <InteractiveParagraph text={item.description} onWordClick={onWordClick} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="section">
-          <h3>Conclusion</h3>
-          <InteractiveParagraph text={content.conclusion} onWordClick={onWordClick} />
-        </div>
-      </div>
-    );
-  }
   
-  // Standard definition view
   return (
     <div>
-      <InteractiveParagraph text={content.summary} onWordClick={onWordClick} />
+      <InteractiveParagraph text={content.summary} onWordClick={onWordClick} isTourTarget={true} />
       
       {content.key_concepts && content.key_concepts.length > 0 && (
         <div className="section">
-          <h3>Key Concepts</h3>
+          <h3>
+            <InteractiveText text="Key Concepts" onWordClick={onWordClick} />
+          </h3>
           {content.key_concepts.map((concept, index) => (
             <div 
               key={index} 
               className="concept"
               draggable="true"
               onDragStart={(e) => handleDragStart(e, concept)}
+              data-tour-id={index === 0 ? 'key-concept' : undefined}
             >
-              <h4>{concept.title}</h4>
+              <h4>
+                <InteractiveText text={concept.title} onWordClick={onWordClick} />
+              </h4>
               <InteractiveParagraph text={concept.description} onWordClick={onWordClick} />
             </div>
           ))}

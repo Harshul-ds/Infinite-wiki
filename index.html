@@ -339,6 +339,64 @@
         font-size: 0.9em;
         color: #555;
       }
+
+      /* Feature Tour Styles */
+      .tour-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1999;
+      }
+      .tour-highlight-box {
+        position: fixed;
+        border-radius: 4px;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+        z-index: 2000;
+        transition: all 0.3s ease-in-out;
+      }
+      .tour-tooltip {
+        position: fixed;
+        background-color: #fff;
+        color: #000;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        z-index: 2001;
+        width: 300px;
+        transition: all 0.3s ease-in-out;
+      }
+      .tour-tooltip h4 {
+        font-weight: bold;
+        margin-bottom: 0.75rem;
+        font-size: 1.1em;
+      }
+      .tour-tooltip p {
+        margin-bottom: 1rem;
+      }
+      .tour-tooltip-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .tour-tooltip-step {
+        font-size: 0.9em;
+        color: #555;
+      }
+      .tour-tooltip-actions button {
+        margin-left: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      .tour-skip-button {
+        color: #555;
+      }
+      .tour-next-button {
+        background-color: #0000ff;
+        color: #fff;
+      }
     </style>
   <script type="importmap">
 {
@@ -346,7 +404,8 @@
     "react/": "https://esm.sh/react@^19.1.0/",
     "react": "https://esm.sh/react@^19.1.0",
     "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.7.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.7.0",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0"
   }
 }
 </script>

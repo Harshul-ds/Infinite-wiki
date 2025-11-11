@@ -13,30 +13,12 @@ interface SearchBarProps {
 
 const SearchBar: React.FC<SearchBarProps> = ({ onSearch, onRandom, isLoading, onTogglePinboard }) => {
   const [query, setQuery] = useState('');
-  const [query2, setQuery2] = useState('');
-  const [isCompareMode, setIsCompareMode] = useState(false);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isLoading) return;
-
-    if (isCompareMode) {
-      if (query.trim() && query2.trim()) {
-        onSearch(`${query.trim()} vs. ${query2.trim()}`);
-        setQuery('');
-        setQuery2('');
-      }
-    } else {
-      if (query.trim()) {
-        onSearch(query.trim());
-        setQuery('');
-      }
-    }
-  };
-
-  const toggleCompareMode = () => {
-    setIsCompareMode(prev => !prev);
-    setQuery2(''); // Clear second input when toggling
+    if (isLoading || !query.trim()) return;
+    onSearch(query.trim());
+    setQuery('');
   };
 
   return (
@@ -46,31 +28,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, onRandom, isLoading, on
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={isCompareMode ? "Topic 1" : "Search"}
+          placeholder="Search"
           className="search-input"
-          aria-label={isCompareMode ? "First topic to compare" : "Search for a topic"}
+          aria-label="Search for a topic"
           disabled={isLoading}
+          data-tour-id="search-input"
         />
-        {isCompareMode && (
-           <input
-            type="text"
-            value={query2}
-            onChange={(e) => setQuery2(e.target.value)}
-            placeholder="Topic 2"
-            className="search-input"
-            aria-label="Second topic to compare"
-            disabled={isLoading}
-            style={{ marginLeft: '1rem' }}
-          />
-        )}
       </form>
-       <button onClick={toggleCompareMode} className="utility-button" disabled={isLoading}>
-        {isCompareMode ? 'Cancel' : 'Compare'}
-      </button>
-      <button onClick={onRandom} className="utility-button" disabled={isLoading}>
+      <button onClick={onRandom} className="utility-button" disabled={isLoading} data-tour-id="random-button">
         Random
       </button>
-      <button onClick={onTogglePinboard} className="utility-button" disabled={isLoading}>
+      <button onClick={onTogglePinboard} className="utility-button" disabled={isLoading} data-tour-id="pinboard-button">
         Pinboard
       </button>
     </div>

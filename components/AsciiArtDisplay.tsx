@@ -65,6 +65,7 @@ const AsciiArtDisplay: React.FC<AsciiArtDisplayProps> = ({ artData, topic }) => 
       aria-label={accessibilityLabel}
       draggable="true"
       onDragStart={handleDragStart}
+      data-tour-id="ascii-art"
     >
       {visibleContent}
       {isStreaming && <span className="blinking-cursor">|</span>}

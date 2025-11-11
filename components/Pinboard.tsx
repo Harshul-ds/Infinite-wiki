@@ -43,15 +43,15 @@ const Pinboard: React.FC<PinboardProps> = ({ isVisible, items, onAdd, onMove, on
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const canvasBounds = canvasRef.current?.getBoundingClientRect();
-    if (!canvasBounds) return;
-
-    // Check if it's a move operation
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const canvasBounds = canvas.getBoundingClientRect();
     const movedItemId = event.dataTransfer.getData('application/vnd.iw.pinned-item');
     const droppedData = event.dataTransfer.getData('application/json');
 
-    const x = event.clientX - canvasBounds.left;
-    const y = event.clientY - canvasBounds.top;
+    const x = event.clientX - canvasBounds.left + canvas.scrollLeft;
+    const y = event.clientY - canvasBounds.top + canvas.scrollTop;
 
     if (movedItemId) {
       onMove(movedItemId, x, y);
