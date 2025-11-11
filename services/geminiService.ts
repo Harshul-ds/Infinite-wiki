@@ -35,45 +35,216 @@ export interface AsciiArtData {
   text?: string; // Text is now optional
 }
 
+export interface DefinitionData {
+  type: 'definition';
+  summary: string;
+  key_concepts: { title: string; description: string }[];
+}
+
+export interface ComparisonData {
+  type: 'comparison';
+  topicA: string;
+  topicB: string;
+  introduction: string;
+  similarities: { title: string; description: string }[];
+  differences: { title: string; description: string }[];
+  conclusion: string;
+}
+
+export interface Meaning {
+  title: string;
+  description: string;
+}
+
+export interface AmbiguityData {
+  is_ambiguous: boolean;
+  meanings?: Meaning[];
+}
+
 /**
- * Streams a definition for a given topic from the Gemini API.
- * @param topic The word or term to define.
- * @returns An async generator that yields text chunks of the definition.
+ * Checks if a given topic is ambiguous and provides different meanings if so.
+ * @param topic The word or term to check.
+ * @param temperature A value from 0.0 to 1.0 controlling the randomness of the output.
+ * @returns A promise that resolves to an ambiguity data object.
  */
-export async function* streamDefinition(
-  topic: string,
-): AsyncGenerator<string, void, undefined> {
+export async function checkForAmbiguity(topic: string, temperature: number): Promise<AmbiguityData> {
   if (!process.env.API_KEY) {
-    yield 'Error: API_KEY is not configured. Please check your environment variables to continue.';
-    return;
+    throw new Error('API_KEY is not configured.');
   }
 
-  const prompt = `Provide a concise, single-paragraph encyclopedia-style definition for the term: "${topic}". Be informative and neutral. Do not use markdown, titles, or any special formatting. Respond with only the text of the definition itself.`;
+  const prompt = `Is the term "${topic}" ambiguous? A term is ambiguous if it has multiple, distinct, well-known meanings (e.g., "stock" as in finance vs. inventory). A term is not ambiguous if it's a specific concept, even if complex.
+
+Respond in JSON format with the following structure:
+- If the term is ambiguous: {"is_ambiguous": true, "meanings": [{"title": "Title for Meaning 1", "description": "Brief description of meaning 1."}, ...]}
+- If the term is NOT ambiguous: {"is_ambiguous": false}
+
+The "title" for each meaning should be a more specific search term. For example, for "stock", a title could be "Stock (finance)".
+
+Return ONLY the raw JSON object. Do not include markdown fences or any other text.`;
 
   try {
-    const response = await ai.models.generateContentStream({
+    const response = await ai.models.generateContent({
       model: textModelName,
       contents: prompt,
       config: {
-        // Disable thinking for the lowest possible latency, as requested.
+        responseMimeType: 'application/json',
+        temperature: temperature,
         thinkingConfig: { thinkingBudget: 0 },
       },
     });
 
-    for await (const chunk of response) {
-      if (chunk.text) {
-        yield chunk.text;
-      }
+    const jsonStr = response.text.trim();
+    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
+        throw new Error('Response is not a valid JSON object');
     }
+    const data = JSON.parse(jsonStr) as AmbiguityData;
+
+    if (typeof data.is_ambiguous !== 'boolean') {
+      throw new Error('JSON response is missing required "is_ambiguous" field.');
+    }
+
+    return data;
   } catch (error) {
-    console.error('Error streaming from Gemini:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'An unknown error occurred.';
-    yield `Error: Could not generate content for "${topic}". ${errorMessage}`;
-    // Re-throwing allows the caller to handle the error state definitively.
-    throw new Error(errorMessage);
+    console.error(`Error checking ambiguity for "${topic}":`, error);
+    // On error, assume it's not ambiguous to allow normal flow.
+    return { is_ambiguous: false };
   }
 }
+
+/**
+ * Generates a structured definition for a given topic from the Gemini API.
+ * @param topic The word or term to define.
+ * @param temperature A value from 0.0 to 1.0 controlling the randomness of the output.
+ * @returns A promise that resolves to a structured definition object.
+ */
+export async function generateDefinition(topic: string, temperature: number): Promise<DefinitionData> {
+  if (!process.env.API_KEY) {
+    throw new Error('API_KEY is not configured. Please check your environment variables to continue.');
+  }
+
+  const prompt = `For the term "${topic}", generate a structured encyclopedia-style entry in JSON format. The JSON object must adhere to this structure:
+
+{
+  "summary": "A concise, single-paragraph summary of the topic. This should be engaging and informative, providing a clear overview.",
+  "key_concepts": [
+    {
+      "title": "Concept Title",
+      "description": "A detailed explanation of a core concept related to the topic."
+    }
+  ]
+}
+
+- The "summary" must be a single string.
+- "key_concepts" must be an array of 2-3 objects, each with a "title" string and a "description" string.
+- IMPORTANT: Preserve all special characters, mathematical notations, and exponents (e.g., ensure "m/s^2" is not simplified to "m/s"). The output must be accurate and suitable for a technical audience.
+
+Return ONLY the raw JSON object. Do not include markdown fences or any other text outside the JSON structure. The response must start with "{" and end with "}".`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: textModelName,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        temperature: temperature,
+        // Disable thinking for the lowest possible latency.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    const jsonStr = response.text.trim();
+    // A simple validation
+    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
+        throw new Error('Response is not a valid JSON object');
+    }
+    const data = JSON.parse(jsonStr);
+    
+    // More validation
+    if (!data.summary || !data.key_concepts) {
+      throw new Error('JSON response is missing required fields.');
+    }
+
+    return { ...data, type: 'definition' };
+  } catch (error) {
+    console.error('Error generating definition from Gemini:', error);
+    const errorMessage =
+      error instanceof Error ? error.message : 'An unknown error occurred.';
+    // Re-throwing allows the caller to handle the error state definitively.
+    throw new Error(`Could not generate content for "${topic}". ${errorMessage}`);
+  }
+}
+
+/**
+ * Generates a structured comparison between two topics.
+ * @param topicA The first topic.
+ * @param topicB The second topic.
+ * @param temperature A value from 0.0 to 1.0 controlling the randomness of the output.
+ * @returns A promise that resolves to a structured comparison object.
+ */
+export async function generateComparison(topicA: string, topicB: string, temperature: number): Promise<ComparisonData> {
+  if (!process.env.API_KEY) {
+    throw new Error('API_KEY is not configured. Please check your environment variables to continue.');
+  }
+
+  const prompt = `For the terms "${topicA}" and "${topicB}", generate a structured encyclopedia-style comparison in JSON format. The JSON object must adhere to this structure:
+
+{
+  "introduction": "A concise, single-paragraph introduction to the comparison between the two topics.",
+  "similarities": [
+    {
+      "title": "Shared Concept Title",
+      "description": "A detailed explanation of a core concept the topics share."
+    }
+  ],
+  "differences": [
+    {
+      "title": "Contrasting Concept Title",
+      "description": "A detailed explanation of a core concept where the topics differ."
+    }
+  ],
+  "conclusion": "A single-paragraph conclusion summarizing the relationship and significance of comparing these topics."
+}
+
+- "introduction" and "conclusion" must be single strings.
+- "similarities" and "differences" must be arrays of 2-3 objects, each with a "title" string and a "description" string.
+- IMPORTANT: Preserve all special characters, mathematical notations, and exponents. The output must be accurate and suitable for a technical audience.
+
+Return ONLY the raw JSON object. Do not include markdown fences or any other text outside the JSON structure. The response must start with "{" and end with "}".`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: textModelName,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        temperature: temperature,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    const jsonStr = response.text.trim();
+    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
+        throw new Error('Response is not a valid JSON object');
+    }
+    const data = JSON.parse(jsonStr);
+
+    if (!data.introduction || !data.similarities || !data.differences || !data.conclusion) {
+      throw new Error('JSON response is missing required fields.');
+    }
+
+    return {
+      ...data,
+      type: 'comparison',
+      topicA,
+      topicB,
+    };
+  } catch (error) {
+    console.error('Error generating comparison from Gemini:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    throw new Error(`Could not generate comparison for "${topicA}" vs "${topicB}". ${errorMessage}`);
+  }
+}
+
 
 /**
  * Generates a single random word or concept using the Gemini API.
@@ -96,6 +267,7 @@ export async function getRandomWord(): Promise<string> {
       },
     });
     return response.text.trim();
+// FIX: Added curly braces to the catch block to fix syntax error.
   } catch (error) {
     console.error('Error getting random word from Gemini:', error);
     const errorMessage =
@@ -115,7 +287,7 @@ export async function generateAsciiArt(topic: string): Promise<AsciiArtData> {
   }
   
   const artPromptPart = `1. "art": meta ASCII visualization of the word "${topic}":
-  - Palette: │─┌┐└┘├┤┬┴┼►◄▲▼○●◐◑░▒▓█▀▄■□▪▫★☆♦♠♣♥⟨⟩/\\_|
+  - Palette: │─┌┐└┘├┤┬┴┼►◄▲▼○●◐◑░▒▓█▀▄■□▪▫★☆♦♠♣♥⟨⟩/\\_|║═╔╗╚╝╠╣╦╩╬▞▟▙▚▜※≈~≡§¤°·…
   - Shape mirrors concept - make the visual form embody the word's essence
   - Examples: 
     * "explosion" → radiating lines from center

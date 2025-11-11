@@ -47,10 +47,25 @@ const AsciiArtDisplay: React.FC<AsciiArtDisplayProps> = ({ artData, topic }) => 
     return () => window.clearInterval(intervalId);
   }, [artData]); // This effect re-runs whenever the artData prop changes.
 
+  const handleDragStart = (event: React.DragEvent<HTMLPreElement>) => {
+    if (!artData) return;
+    const data = {
+      type: 'ascii',
+      content: { art: artData.art, topic: topic }
+    };
+    event.dataTransfer.setData('application/json', JSON.stringify(data));
+    event.dataTransfer.effectAllowed = 'copy';
+  };
+
   const accessibilityLabel = `ASCII art for ${topic}`;
 
   return (
-    <pre className="ascii-art" aria-label={accessibilityLabel}>
+    <pre 
+      className="ascii-art" 
+      aria-label={accessibilityLabel}
+      draggable="true"
+      onDragStart={handleDragStart}
+    >
       {visibleContent}
       {isStreaming && <span className="blinking-cursor">|</span>}
     </pre>

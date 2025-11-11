@@ -4,11 +4,17 @@
 */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { streamDefinition, generateAsciiArt, AsciiArtData } from './services/geminiService';
+import { generateDefinition, generateAsciiArt, generateComparison, checkForAmbiguity, AsciiArtData, DefinitionData, ComparisonData, Meaning } from './services/geminiService';
 import ContentDisplay from './components/ContentDisplay';
 import SearchBar from './components/SearchBar';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import AsciiArtDisplay from './components/AsciiArtDisplay';
+import Breadcrumbs from './components/Breadcrumbs';
+import TemperatureSlider from './components/TemperatureSlider';
+import Pinboard from './components/Pinboard';
+import Disambiguation from './components/Disambiguation';
+import { PinnedItem } from './types';
+
 
 // A curated list of "banger" words and phrases for the random button.
 const PREDEFINED_WORDS = [
@@ -45,123 +51,147 @@ const createFallbackArt = (topic: string): AsciiArtData => {
 };
 
 const App: React.FC = () => {
-  const [currentTopic, setCurrentTopic] = useState<string>('Hypertext');
-  const [content, setContent] = useState<string>('');
+  const [history, setHistory] = useState<string[]>(['Hypertext']);
+  const [content, setContent] = useState<DefinitionData | ComparisonData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [asciiArt, setAsciiArt] = useState<AsciiArtData | null>(null);
-  const [generationTime, setGenerationTime] = useState<number | null>(null);
+  const [temperature, setTemperature] = useState<number>(0.4); // 0.1=Factual, 1.0=Creative
+  const [ambiguityOptions, setAmbiguityOptions] = useState<Meaning[] | null>(null);
+  const [pinnedItems, setPinnedItems] = useState<PinnedItem[]>([]);
+  const [isPinboardVisible, setIsPinboardVisible] = useState(false);
 
+  const currentTopic = history[history.length - 1];
 
   useEffect(() => {
     if (!currentTopic) return;
 
     let isCancelled = false;
+    const isComparison = currentTopic.toLowerCase().includes(' vs. ');
 
-    const fetchContentAndArt = async () => {
+    const fetchContent = async () => {
       // Set initial state for a clean page load
       setIsLoading(true);
       setError(null);
-      setContent(''); // Clear previous content immediately
+      setContent(null);
       setAsciiArt(null);
-      setGenerationTime(null);
-      const startTime = performance.now();
+      setAmbiguityOptions(null);
 
-      // Kick off ASCII art generation, but don't wait for it.
-      // It will appear when it's ready, without blocking the definition.
-      generateAsciiArt(currentTopic)
-        .then(art => {
-          if (!isCancelled) {
-            setAsciiArt(art);
-          }
-        })
-        .catch(err => {
-          if (!isCancelled) {
-            console.error("Failed to generate ASCII art:", err);
-            // Generate a simple fallback ASCII art box on failure
-            const fallbackArt = createFallbackArt(currentTopic);
-            setAsciiArt(fallbackArt);
-          }
-        });
-
-      let accumulatedContent = '';
       try {
-        for await (const chunk of streamDefinition(currentTopic)) {
-          if (isCancelled) break;
-          
-          if (chunk.startsWith('Error:')) {
-            throw new Error(chunk);
+        // Step 1: Check for ambiguity (unless it's a comparison)
+        if (!isComparison) {
+          const ambiguityData = await checkForAmbiguity(currentTopic, temperature);
+          if (!isCancelled && ambiguityData.is_ambiguous && ambiguityData.meanings?.length) {
+            setAmbiguityOptions(ambiguityData.meanings);
+            setIsLoading(false);
+            return; // Stop processing, wait for user input
           }
-          accumulatedContent += chunk;
-          if (!isCancelled) {
-            setContent(accumulatedContent);
-          }
+        }
+        
+        // Step 2: Fetch content and art
+        // Kick off ASCII art generation, but don't wait for it.
+        generateAsciiArt(currentTopic)
+          .then(art => {
+            if (!isCancelled) setAsciiArt(art);
+          })
+          .catch(err => {
+            if (!isCancelled) {
+              console.error("Failed to generate ASCII art:", err);
+              setAsciiArt(createFallbackArt(currentTopic));
+            }
+          });
+
+        let data;
+        if (isComparison) {
+          const [topicA, topicB] = currentTopic.split(/ vs. /i);
+          data = await generateComparison(topicA.trim(), topicB.trim(), temperature);
+        } else {
+          data = await generateDefinition(currentTopic, temperature);
+        }
+        
+        if (!isCancelled) {
+          setContent(data);
         }
       } catch (e: unknown) {
         if (!isCancelled) {
           const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
           setError(errorMessage);
-          setContent(''); // Ensure content is clear on error
+          setContent(null);
           console.error(e);
         }
       } finally {
         if (!isCancelled) {
-          const endTime = performance.now();
-          setGenerationTime(endTime - startTime);
           setIsLoading(false);
         }
       }
     };
 
-    fetchContentAndArt();
+    fetchContent();
     
     return () => {
       isCancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTopic]);
+  }, [currentTopic, temperature]);
 
-  const handleWordClick = useCallback((word: string) => {
-    const newTopic = word.trim();
-    if (newTopic && newTopic.toLowerCase() !== currentTopic.toLowerCase()) {
-      setCurrentTopic(newTopic);
-    }
-  }, [currentTopic]);
-
-  const handleSearch = useCallback((topic: string) => {
+  const handleTopicChange = useCallback((topic: string) => {
     const newTopic = topic.trim();
     if (newTopic && newTopic.toLowerCase() !== currentTopic.toLowerCase()) {
-      setCurrentTopic(newTopic);
+      setAmbiguityOptions(null); // Clear ambiguity when a new topic is chosen
+      setHistory(prev => [...prev, newTopic]);
     }
   }, [currentTopic]);
 
   const handleRandom = useCallback(() => {
-    setIsLoading(true); // Disable UI immediately
+    setIsLoading(true);
     setError(null);
-    setContent('');
+    setContent(null);
     setAsciiArt(null);
+    setAmbiguityOptions(null);
 
     const randomIndex = Math.floor(Math.random() * UNIQUE_WORDS.length);
-    const randomWord = UNIQUE_WORDS[randomIndex];
+    let randomWord = UNIQUE_WORDS[randomIndex];
 
-    // Prevent picking the same word twice in a row
     if (randomWord.toLowerCase() === currentTopic.toLowerCase()) {
       const nextIndex = (randomIndex + 1) % UNIQUE_WORDS.length;
-      setCurrentTopic(UNIQUE_WORDS[nextIndex]);
-    } else {
-      setCurrentTopic(randomWord);
+      randomWord = UNIQUE_WORDS[nextIndex];
     }
+    setHistory([randomWord]);
   }, [currentTopic]);
 
+  const handleBreadcrumbClick = useCallback((index: number) => {
+    if (index < history.length - 1) {
+      setHistory(prev => prev.slice(0, index + 1));
+    }
+  }, [history.length]);
+
+  const addPinnedItem = (item: Omit<PinnedItem, 'id'>) => {
+    setPinnedItems(prev => [...prev, { ...item, id: `item-${Date.now()}` }]);
+    setIsPinboardVisible(true);
+  };
+  
+  const updatePinnedItemPosition = (id: string, x: number, y: number) => {
+    setPinnedItems(prev => prev.map(item => item.id === id ? { ...item, x, y } : item));
+  };
 
   return (
     <div>
-      <SearchBar onSearch={handleSearch} onRandom={handleRandom} isLoading={isLoading} />
+      <Breadcrumbs path={history} onNavigate={handleBreadcrumbClick} />
+      <SearchBar 
+        onSearch={handleTopicChange} 
+        onRandom={handleRandom} 
+        isLoading={isLoading}
+        onTogglePinboard={() => setIsPinboardVisible(prev => !prev)}
+      />
+      <TemperatureSlider value={temperature} onChange={setTemperature} disabled={isLoading} />
       
       <header style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-          INFINITE WIKI
+        <h1 style={{ letterSpacing: 'normal', textTransform: 'lowercase', fontWeight: 'bold' }}>
+          infinite-wiki.app
         </h1>
+        <p style={{ marginTop: '0.5rem', color: '#666' }}>
+          An encyclopedia where every word is a hyperlink.
+        </p>
         <AsciiArtDisplay artData={asciiArt} topic={currentTopic} />
       </header>
       
@@ -178,35 +208,35 @@ const App: React.FC = () => {
             </div>
           )}
           
-          {/* Show skeleton loader when loading and no content is yet available */}
-          {isLoading && content.length === 0 && !error && (
+          {isLoading && !content && !error && !ambiguityOptions && (
             <LoadingSkeleton />
           )}
 
-          {/* Show content as it streams or when it's interactive */}
-          {content.length > 0 && !error && (
+          {ambiguityOptions && (
+            <Disambiguation options={ambiguityOptions} onSelect={handleTopicChange} />
+          )}
+
+          {content && !error && !ambiguityOptions && (
              <ContentDisplay 
                content={content} 
-               isLoading={isLoading} 
-               onWordClick={handleWordClick} 
+               onWordClick={handleTopicChange} 
              />
           )}
 
-          {/* Show empty state if fetch completes with no content and is not loading */}
-          {!isLoading && !error && content.length === 0 && (
+          {!isLoading && !error && !content && !ambiguityOptions && (
             <div style={{ color: '#888', padding: '2rem 0' }}>
               <p>Content could not be generated.</p>
             </div>
           )}
         </div>
       </main>
-
-      <footer className="sticky-footer">
-        <p className="footer-text" style={{ margin: 0 }}>
-          Infinite Wiki by <a href="https://x.com/dev_valladares" target="_blank" rel="noopener noreferrer">Dev Valladares</a> · Generated by Gemini 2.5 Flash Lite
-          {generationTime && ` · ${Math.round(generationTime)}ms`}
-        </p>
-      </footer>
+      <Pinboard 
+        isVisible={isPinboardVisible} 
+        items={pinnedItems} 
+        onAdd={addPinnedItem}
+        onMove={updatePinnedItemPosition}
+        onClose={() => setIsPinboardVisible(false)}
+      />
     </div>
   );
 };

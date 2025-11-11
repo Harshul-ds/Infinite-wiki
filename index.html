@@ -21,7 +21,7 @@
         font-size: 1.1rem; /* Set base font size for the entire app */
         line-height: 1.6; /* Set base line height for readability */
         margin: 0;
-        padding: 2rem 2rem 5rem 2rem; /* Increased bottom padding for sticky footer */
+        padding: 2rem; /* Adjusted padding after footer removal */
       }
       #root {
         max-width: 65ch; /* Optimal line length for readability */
@@ -32,7 +32,18 @@
         font-size: 1em; /* 1em equals the parent font-size, which is 1.1rem from body */
         margin: 0;
         font-weight: normal; /* Ensure no bolding by default */
+        line-height: 1.3; /* Tighter line-height for headings */
       }
+      /* Add some styling for paragraphs for better spacing */
+      p {
+        margin: 0 0 1em 0; /* Add bottom margin to paragraphs */
+      }
+
+      /* Last paragraph in a section shouldn't have bottom margin */
+      p:last-child {
+        margin-bottom: 0;
+      }
+
       /* Reset button for link-like behavior */
       button {
         background: none;
@@ -56,19 +67,6 @@
         text-decoration: underline;
         text-underline-offset: 2px;
       }
-      .footer-text {
-        font-size: 0.9em;
-        color: #888;
-      }
-      .footer-text a {
-        color: inherit;
-        text-decoration: none;
-        transition: color 0.2s ease-in-out;
-      }
-      .footer-text a:hover {
-        color: #0000ff;
-        text-decoration: underline;
-      }
       .ascii-art {
         font-family: monospace;
         text-align: left; /* Aligned to the left for better block letter rendering */
@@ -77,9 +75,49 @@
         margin: 2rem 0; /* Increased margin for more breathing room */
         line-height: 1.1; /* Tighter line height for better art rendering */
         font-size: 0.8em; /* Slightly smaller font for more detailed art */
+        background-color: #fafafa; /* Subtle background */
+        border: 1px solid #eee;    /* Light border */
+        border-radius: 4px;        /* Rounded corners */
+        padding: 1.5rem;           /* Internal spacing */
+        overflow-x: auto;          /* Scroll for wide art */
+        cursor: grab;
       }
       .blinking-cursor {
         animation: blink 1s step-end infinite;
+      }
+      
+      /* Breadcrumbs Styles */
+      .breadcrumbs-container {
+        margin-bottom: 2rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9em;
+        color: #555;
+      }
+
+      .breadcrumb-item {
+        color: #555;
+        text-decoration: none;
+        transition: color 0.2s;
+        text-transform: capitalize;
+      }
+
+      .breadcrumb-item:hover {
+        color: #0000ff;
+        text-decoration: underline;
+      }
+
+      .breadcrumb-item-active {
+        color: #000;
+        font-weight: bold;
+        text-transform: capitalize;
+      }
+
+      .breadcrumb-separator {
+        user-select: none;
+        color: #999;
       }
       
       /* Search Bar Styles */
@@ -87,7 +125,7 @@
         display: flex;
         align-items: baseline; /* Align to baseline */
         gap: 1rem;
-        margin-bottom: 3rem;
+        margin-bottom: 1rem; /* Adjusted margin */
       }
 
       .search-form {
@@ -115,7 +153,7 @@
         opacity: 1; /* Override browser default lighter color */
       }
       
-      .random-button {
+      .utility-button {
         background: none;
         border: none;
         padding: 0.5rem 0; /* Align vertically with input */
@@ -125,24 +163,181 @@
         white-space: nowrap; /* Prevent "Random" from wrapping */
       }
       
-      .random-button:hover:not(:disabled) {
+      .utility-button:hover:not(:disabled) {
         color: #0000ff;
       }
 
-      .random-button:disabled {
+      .utility-button:disabled {
         color: #ccc;
         cursor: not-allowed;
       }
 
-      .sticky-footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+      /* Temperature Slider Styles */
+      .temperature-slider-container {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 3rem;
+        color: #555;
+        font-size: 0.9em;
+      }
+
+      .temperature-slider {
+        flex-grow: 1;
+        -webkit-appearance: none; /* Override default CSS */
+        appearance: none;
         width: 100%;
-        text-align: center;
-        padding: 1.5rem 0;
-        background-color: #ffffff;
+        height: 3px;
+        background: #ddd;
+        outline: none;
+        opacity: 0.7;
+        transition: opacity .2s;
+      }
+
+      .temperature-slider:hover {
+        opacity: 1;
+      }
+
+      /* Thumb styles for Webkit browsers */
+      .temperature-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        background: #000;
+        cursor: pointer;
+        border-radius: 50%;
+      }
+
+      /* Thumb styles for Mozilla browsers */
+      .temperature-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: #000;
+        cursor: pointer;
+        border-radius: 50%;
+        border: none;
+      }
+
+      .temperature-slider:disabled {
+        opacity: 0.3;
+      }
+      .temperature-slider:disabled::-webkit-slider-thumb {
+        background: #ccc;
+      }
+      .temperature-slider:disabled::-moz-range-thumb {
+        background: #ccc;
+      }
+
+      .slider-label {
+        white-space: nowrap;
+      }
+
+      /* New section styles */
+      .section {
+        margin-top: 2.5rem;
+        border-top: 1px solid #eee;
+        padding-top: 1.5rem;
+      }
+
+      .section h3 {
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.9em;
+        color: #555;
+        margin-bottom: 1.5rem;
+      }
+      
+      .concept {
+        margin-bottom: 1.5rem;
+        cursor: grab;
+      }
+
+      .concept:last-child {
+        margin-bottom: 0;
+      }
+
+      .concept h4 {
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+      }
+
+      /* Pinboard Styles */
+      .pinboard {
+        position: fixed;
+        top: 0;
+        right: -400px; /* Start off-screen */
+        width: 400px;
+        height: 100%;
+        background-color: #f0f0f0;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        transition: right 0.3s ease-in-out;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+      }
+      .pinboard.visible {
+        right: 0;
+      }
+      .pinboard-header {
+        padding: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #ddd;
+      }
+      .pinboard-canvas {
+        flex-grow: 1;
+        position: relative;
+        overflow: auto;
+      }
+      .pinned-item {
+        position: absolute;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 0.75rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        cursor: move;
+        width: 200px; /* Fixed width for items */
+      }
+      .pinned-item pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 0.8em;
+      }
+
+      /* Disambiguation Styles */
+      .disambiguation-container {
+        border: 1px solid #eee;
+        padding: 1.5rem;
+        border-radius: 4px;
+      }
+      .disambiguation-container h3 {
+        font-weight: bold;
+        margin-bottom: 1.5rem;
+      }
+      .disambiguation-option {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+        transition: background-color 0.2s;
+      }
+      .disambiguation-option:hover {
+        background-color: #f9f9f9;
+      }
+      .disambiguation-option strong {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+      }
+      .disambiguation-option span {
+        font-size: 0.9em;
+        color: #555;
       }
     </style>
   <script type="importmap">
@@ -155,7 +350,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
