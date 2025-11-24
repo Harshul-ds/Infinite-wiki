@@ -6,7 +6,7 @@
 
 This contains everything you need to run your app locally.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1OnKEXzaxl3TwR-gx150AhPAi5q7508Hd
+app: https://infinite-wiki-260856250249.us-west1.run.app/
 
 ## Run Locally
 
